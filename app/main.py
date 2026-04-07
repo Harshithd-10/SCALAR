@@ -33,6 +33,10 @@ def create_app() -> FastAPI:
     application.include_router(step.router)
     application.include_router(state.router)
 
+    @application.get("/")
+    async def root() -> dict:
+        return {"status": "ok"}
+
     @application.get("/health")
     async def health() -> dict:
         return {"status": "ok"}
