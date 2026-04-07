@@ -11,7 +11,7 @@
 | **Hackathon** | Scalar Hackathon by Meta |
 | **Domain** | AI/ML + Cybersecurity |
 | **One-line description** | An OpenEnv-compliant FastAPI environment that trains/evaluates AI agents on code review and security auditing across three deterministic difficulty tiers |
-| **Phase Status** | Phase 1 (Research) ✅ \| Phase 2 (Architecture) ✅ \| Phase 3 (Env Setup) ⬜ \| Phase 4 (Logic Verify) ⬜ \| Phase 5 (Coding) ⬜ |
+| **Phase Status** | Phase 1 (Research) ✅ \| Phase 2 (Architecture) ✅ \| Phase 3 (Env Setup) ✅ \| Phase 4 (Logic Verify) ⬜ \| Phase 5 (Coding) ⬜ |
 
 ---
 
@@ -226,5 +226,11 @@ Agent -> GET /state
 
 ---
 
+- Python version: 3.11.9 (pyenv)
+- Virtual environment: venv/ (python3.11)
+- Key dependency versions: as pinned in requirements.txt
+- GitHub repo: Mannava-Daasaradhi/CODE_REVIEW_SECURITY_WORKFLOW
+- API confirmed running on port 7860
+
 *claude.md v1.0 | Phase 2 Architecture | Produced by Claude Master Architect*
-*Next: Phase 3 (human: venv + deps + GitHub) -> Phase 4 (Claude: logic verify against actual repo)*
+*Next: Phase 4 (Claude: logic verify against actual repo)*
