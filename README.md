@@ -311,7 +311,7 @@ pytest tests/test_graders.py -v -k "determinism"
 
 ## Running the Baseline Script
 
-The baseline script sends each task episode to the environment via HTTP, calls Gemini 2.5 Flash to generate an agent response, and records the scores. It is used to produce the baseline numbers reported below and is required for Phase 1 pass.
+The baseline script sends each task episode to the environment via HTTP, calls a Gemini model to generate an agent response, and records the scores. It is used to produce the baseline numbers reported below and is required for Phase 1 pass.
 
 ```bash
 # Environment must be running first (local or deployed)
@@ -321,7 +321,10 @@ export GEMINI_API_KEY=your_key_here
 python baseline/run_baseline.py --env-url http://localhost:7860
 
 # Against deployed HuggingFace Space
-python baseline/run_baseline.py --env-url https://your-space.hf.space
+python baseline/run_baseline.py --env-url https://harshithd10-hackathon.hf.space
+
+# Use lite model if you hit free-tier quota limits on gemini-2.5-flash
+python baseline/run_baseline.py --env-url https://harshithd10-hackathon.hf.space --model gemini-2.5-flash-lite
 ```
 
 Output is written to `baseline/results.json`.
@@ -332,18 +335,17 @@ Output is written to `baseline/results.json`.
 
 ## Baseline Scores
 
-Scores produced by Gemini 2.5 Flash (`gemini-2.5-flash`, `temperature=0`) against the live environment.
+Scores produced by Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`, `temperature=0`) against the live deployed environment at `https://harshithd10-hackathon.hf.space`.
 
-| Task | Difficulty | Baseline Score (Gemini 2.5 Flash) | Episodes |
-|---|---|---|---|
-| Task 1 | Easy | 1.0000 | 10 |
-| Task 2 | Medium | 1.0000 | 10 |
-| Task 3 | Hard | 0.76+ | 10 |
+| Task | Difficulty | Baseline Score | Bug Score | Security Score | Review Quality |
+|---|---|---|---|---|---|
+| Task 1 | Easy | **1.0000** | — | — | — |
+| Task 2 | Medium | **1.0000** | — | — | — |
+| Task 3 | Hard | **0.9500** | 1.00 | 1.00 | 0.75 |
 
-Task 3 composite breakdown (representative run on ep_004):
-- Bug detection score: 0.90
-- Security findings score: 0.50–1.00 (varies by episode vulnerability type)
-- Review quality score: 1.00
+Reproduced across multiple episode runs (ep_003 through ep_005). Task 1 and Task 2 consistently score 1.0. Task 3 composite score of 0.95 reflects perfect bug detection and security findings; the 0.25 review quality gap is the expected ceiling for models that correctly identify all issues but omit one of the four keyword categories (severity label, line reference, actionable language, category label) in their review text.
+
+All graders are deterministic — the same action on the same episode always returns the same score.
 
 ---
 
@@ -403,7 +405,7 @@ Episodes live in `data/tasks/`. Each file is a JSON array of 10 episode objects.
 2. Set `GEMINI_API_KEY` in the Space's Secrets settings (not in the Dockerfile)
 3. Push the repository to the Space's git remote
 4. Confirm the Space builds and the health check at `/` responds
-5. Run `openenv validate https://your-space.hf.space`
+5. Run `openenv validate https://harshithd10-hackathon.hf.space`
 
 **Port**: The Dockerfile exposes port 7860. HuggingFace Spaces requires exactly this port. Do not change it.
 
