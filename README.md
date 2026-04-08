@@ -91,7 +91,7 @@ pr-review-env/
 │       └── task3_episodes.json  # 10 hard difficulty episodes
 │
 ├── baseline/
-│   └── run_baseline.py          # Gemini 2.5 Flash agent script for benchmarking
+│   └── run_baseline.py          # GPT-4o agent script for benchmarking
 │
 ├── tests/
 │   ├── test_graders.py          # Determinism tests + correctness tests per grader
@@ -101,7 +101,7 @@ pr-review-env/
 ├── openenv.yaml                 # OpenEnv metadata (required for openenv validate)
 ├── Dockerfile                   # Production container, linux/amd64, port 7860
 ├── requirements.txt             # All deps pinned at exact versions
-├── .env.example                 # Safe template — copy to .env, fill GEMINI_API_KEY
+├── .env.example                 # Safe template — copy to .env, fill OPENAI_API_KEY
 ├── .gitignore
 ├── README.md                    # This file
 └── claude.md                    # Internal AI passport (architecture decisions)
@@ -114,7 +114,7 @@ pr-review-env/
 - Python 3.11 (exact — not 3.10, not 3.12)
 - Docker (for containerization and local testing)
 - `openenv` CLI installed (`pip install openenv`)
-- A Gemini API key (for the baseline script only — not needed to run the environment)
+- An OpenAI API key (for the baseline script only — not needed to run the environment)
 - A HuggingFace account with Spaces access (for deployment)
 
 ---
@@ -137,7 +137,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env and set GEMINI_API_KEY=...
+# Edit .env and set OPENAI_API_KEY=...
 # Never commit .env
 ```
 
@@ -311,11 +311,11 @@ pytest tests/test_graders.py -v -k "determinism"
 
 ## Running the Baseline Script
 
-The baseline script sends each task episode to the environment via HTTP, calls a Gemini model to generate an agent response, and records the scores. It is used to produce the baseline numbers reported below and is required for Phase 1 pass.
+The baseline script sends each task episode to the environment via HTTP, calls an OpenAI model to generate an agent response, and records the scores. It is used to produce the baseline numbers reported below and is required for Phase 1 pass.
 
 ```bash
 # Environment must be running first (local or deployed)
-export GEMINI_API_KEY=your_key_here
+export OPENAI_API_KEY=your_key_here
 
 # Against local instance
 python baseline/run_baseline.py --env-url http://localhost:7860
@@ -323,8 +323,8 @@ python baseline/run_baseline.py --env-url http://localhost:7860
 # Against deployed HuggingFace Space
 python baseline/run_baseline.py --env-url https://harshithd10-hackathon.hf.space
 
-# Use lite model if you hit free-tier quota limits on gemini-2.5-flash
-python baseline/run_baseline.py --env-url https://harshithd10-hackathon.hf.space --model gemini-2.5-flash-lite
+# Use gpt-4o-mini if you hit quota limits on gpt-4o
+python baseline/run_baseline.py --env-url https://harshithd10-hackathon.hf.space --model gpt-4o-mini
 ```
 
 Output is written to `baseline/results.json`.
@@ -335,7 +335,7 @@ Output is written to `baseline/results.json`.
 
 ## Baseline Scores
 
-Scores produced by Gemini 2.5 Flash Lite (`gemini-2.5-flash-lite`, `temperature=0`) against the live deployed environment at `https://harshithd10-hackathon.hf.space`.
+Scores produced by GPT-4o (`gpt-4o`, `temperature=0`) against the live deployed environment at `https://harshithd10-hackathon.hf.space`.
 
 | Task | Difficulty | Baseline Score | Bug Score | Security Score | Review Quality |
 |---|---|---|---|---|---|
@@ -402,7 +402,7 @@ Episodes live in `data/tasks/`. Each file is a JSON array of 10 episode objects.
 ## Deployment (HuggingFace Spaces)
 
 1. Create a new HuggingFace Space with Docker SDK
-2. Set `GEMINI_API_KEY` in the Space's Secrets settings (not in the Dockerfile)
+2. Set `OPENAI_API_KEY` in the Space's Secrets settings (not in the Dockerfile)
 3. Push the repository to the Space's git remote
 4. Confirm the Space builds and the health check at `/` responds
 5. Run `openenv validate https://harshithd10-hackathon.hf.space`
@@ -429,7 +429,7 @@ All configuration lives in `.env` and is read by `app/config.py`. Never set thes
 
 | Key | Required | Default | Description |
 |---|---|---|---|
-| `GEMINI_API_KEY` | Baseline script only | — | Gemini API key for baseline inference. Not used by the environment server. |
+| `OPENAI_API_KEY` | Baseline script only | — | OpenAI API key for baseline inference. Not used by the environment server. |
 | `ENV_HOST` | No | `0.0.0.0` | Host the FastAPI server binds to |
 | `ENV_PORT` | No | `7860` | Port (must be 7860 for HuggingFace Spaces) |
 | `LOG_LEVEL` | No | `INFO` | Logging level: DEBUG, INFO, WARNING, ERROR |
@@ -441,7 +441,7 @@ All configuration lives in `.env` and is read by `app/config.py`. Never set thes
 
 - **Graders never execute analyzed code.** All analysis uses Python's `ast` module (parse tree only) and `re` (regex). No `exec()` or `eval()` is ever called on agent-submitted or episode code.
 - **Ground truth is server-side only.** It is loaded from the episode JSON at grading time and never appears in any API response.
-- **No secrets in code.** `GEMINI_API_KEY` is read exclusively from environment variables.
+- **No secrets in code.** `OPENAI_API_KEY` is read exclusively from environment variables.
 - **Input validation at every boundary.** All agent actions are validated by Pydantic v2 strict mode before reaching any grader logic.
 - **Threat model**: See `claude.md` Section 2 for full trust boundary and threat actor analysis.
 
@@ -453,7 +453,7 @@ All configuration lives in `.env` and is read by `app/config.py`. Never set thes
 2. **No authentication on the API**: The OpenEnv spec does not require it, but this means the environment is fully public when deployed. Do not put sensitive data in episodes.
 3. **Review quality rubric is keyword-based**: Task 3's 20% review quality sub-score uses keyword presence detection. A sophisticated agent could game this by including the keywords without writing a useful review. Acceptable for a hackathon submission.
 4. **Episode dataset is static**: Episodes are baked into the JSON files at build time. Adding new episodes requires a redeployment.
-5. **Free-tier rate limits**: The baseline script includes automatic rate-limit retry logic for the Gemini free tier (5 req/min). Runs take ~60s total due to inter-run delays.
+5. **Rate limits**: The baseline script includes automatic rate-limit retry logic (5 req/min). Runs take ~60s total due to inter-run delays. Use `gpt-4o-mini` if you hit quota limits.
 
 ---
 
@@ -477,7 +477,7 @@ All configuration lives in `.env` and is read by `app/config.py`. Never set thes
 
 - Multi-turn episode support (agent can query for more context before submitting a final action)
 - Larger episode dataset with automated generation from real open-source PRs
-- Leaderboard tracking across multiple baseline models (Gemini, GPT-4o, Claude)
+- Leaderboard tracking across multiple baseline models (GPT-4o, Claude, Gemini)
 - Streaming reward signals for multi-file PR diffs (intermediate rewards per file reviewed)
 - More robust review quality rubric using structural analysis rather than keyword matching
 
