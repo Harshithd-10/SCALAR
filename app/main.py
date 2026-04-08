@@ -146,3 +146,23 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
+import uvicorn
+
+
+def start() -> None:
+    """
+    Programmatic uvicorn launcher.
+    Called by the `serve` console script installed via pyproject.toml [project.scripts].
+    Also imported by server/app.py for OpenEnv multi-mode discovery.
+    """
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=7860,
+        log_level="info",
+        workers=1,  # Single worker — state is in-process (asyncio.Lock). See CLAUDE.md §1.
+    )
+
+
+if __name__ == "__main__":
+    start()

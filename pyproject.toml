@@ -19,7 +19,13 @@ dependencies = [
     "pydantic-settings",
     "loguru",
     "python-dotenv",
+    "openenv-core>=0.2.0",
 ]
+
+[project.scripts]
+# `openenv validate` and multi-mode runners discover the server via this entry point.
+# Invokes uvicorn on port 7860 — matches Dockerfile CMD and HF Spaces bind requirement.
+serve = "app.main:start"
 
 [project.optional-dependencies]
 dev = [

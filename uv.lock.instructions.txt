@@ -1,0 +1,10 @@
+# uv.lock must be generated in the repo by running:
+#
+#   pip install uv          # if not already installed
+#   uv lock                 # resolves pyproject.toml + requirements.txt, writes uv.lock
+#
+# Commit the generated uv.lock file. It is NOT .gitignored.
+# Re-run `uv lock` any time pyproject.toml [project.dependencies] changes.
+#
+# This placeholder file must be replaced with the real uv.lock before
+# `openenv validate` will pass the missing-lock-file check.
