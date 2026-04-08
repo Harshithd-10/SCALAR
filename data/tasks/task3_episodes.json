@@ -39,7 +39,7 @@
     "instructions": "Review this PR diff. Identify bugs (flag the diff line numbers where they appear), security vulnerabilities, and provide a structured code review.",
     "ground_truth": {
       "bug_lines": [8],
-      "vuln_types": ["xss", "broken_access_control"],
+      "vuln_types": ["xss"],
       "review_quality_keywords": ["high", "line", "must", "security"]
     }
   },
