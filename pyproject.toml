@@ -25,7 +25,7 @@ dependencies = [
 [project.scripts]
 # `openenv validate` and multi-mode runners discover the server via this entry point.
 # Invokes uvicorn on port 7860 — matches Dockerfile CMD and HF Spaces bind requirement.
-serve = "app.main:start"
+serve = "server.app:main"
 
 [project.optional-dependencies]
 dev = [

@@ -1,13 +1,35 @@
 """
-server/app.py — Required by openenv validate for multi-mode deployment discovery.
+server/app.py — OpenEnv multi-mode deployment entry point.
 
-The canonical app lives in app/main.py (per CLAUDE.md §4 module map).
-This file is a thin re-export so the OpenEnv validator can find `app` and
-`start` at the path it expects (server/app.py) without duplicating any logic.
+Required by `openenv validate`:
+  - Exposes `app` (the FastAPI instance)
+  - Exposes `main()` as a named, directly callable function
+  - Has `if __name__ == '__main__': main()` guard
 
-Do NOT add business logic here.
+All business logic lives in app/main.py per CLAUDE.md §4.
+This file is the validator-facing launcher only.
 """
 
-from app.main import app, start  # noqa: F401 — re-exported for openenv validator
+import uvicorn
 
-__all__ = ["app", "start"]
+from app.main import app  # noqa: F401 — re-exported for OpenEnv discovery
+
+__all__ = ["app", "main"]
+
+
+def main() -> None:
+    """
+    Primary server entry point discovered by openenv validate.
+    Registered in pyproject.toml [project.scripts] as `serve = "server.app:main"`.
+    """
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=7860,
+        log_level="info",
+        workers=1,  # Single worker — in-process state + asyncio.Lock. See CLAUDE.md §1.
+    )
+
+
+if __name__ == "__main__":
+    main()
