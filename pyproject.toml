@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools>=68.0.0", "wheel>=0.41.0"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "pr-review-env"
+version = "0.1.0"
+description = "OpenEnv-compliant FastAPI environment for AI code review and security auditing"
+requires-python = ">=3.11"
+readme = "README.md"
+
+# Mirrors requirements.txt — keep in sync.
+# requirements.txt remains the install source for Docker/HF Spaces (pip install -r).
+# This file satisfies tooling that expects pyproject.toml (validators, pyright, ruff, etc.)
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "loguru",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",   # TestClient transport for FastAPI integration tests
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+# ---------------------------------------------------------------------------
+# Ruff (linter + formatter) — zero-config baseline matching project style
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = []
+
+# ---------------------------------------------------------------------------
+# Pyright (static type checker)
+# ---------------------------------------------------------------------------
+[tool.pyright]
+pythonVersion = "3.11"
+include = ["app", "baseline", "tests"]
+exclude = ["venv", "__pycache__"]
+typeCheckingMode = "basic"
+
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
