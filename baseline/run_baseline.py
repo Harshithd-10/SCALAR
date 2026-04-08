@@ -23,13 +23,15 @@ from pathlib import Path
 import httpx
 from google import genai
 from google.genai import types
-from google.api_core.exceptions import ResourceExhausted
 
 DIFFICULTIES = ["easy", "medium", "hard"]
 RESULTS_PATH = Path(__file__).parent / "results.json"
 
-# Delay between difficulty runs to stay under free-tier RPM limit (5 req/min)
-INTER_RUN_DELAY = 15  # seconds — conservative buffer between the 3 runs
+# gemini-1.5-flash: 1500 req/day free tier (vs 20/day for gemini-2.5-flash)
+MODEL_NAME = "gemini-1.5-flash"
+
+# Delay between difficulty runs to stay under free-tier RPM limit
+INTER_RUN_DELAY = 15  # seconds
 
 SYSTEM_PROMPT = """You are a senior software engineer performing code review and security auditing.
 
@@ -52,14 +54,17 @@ def build_user_prompt(observation: dict) -> str:
     )
 
 
-def _parse_retry_delay(error: ResourceExhausted) -> int:
+def _parse_retry_delay(error_message: str) -> int:
     """
-    Extract the retry_delay seconds from the Gemini error message if present.
+    Extract retry delay seconds from the error message if present.
     Falls back to 65 seconds (safe default above free-tier 1-min window).
     """
-    match = re.search(r"retry_delay\s*\{[^}]*seconds:\s*(\d+)", str(error))
+    match = re.search(r"retry in (\d+)", error_message)
     if match:
         return int(match.group(1)) + 5  # add 5s buffer
+    match = re.search(r"retryDelay.*?(\d+)s", error_message)
+    if match:
+        return int(match.group(1)) + 5
     return 65
 
 
@@ -69,7 +74,7 @@ def call_agent(client: genai.Client, observation: dict, max_retries: int = 5) ->
     for attempt in range(max_retries):
         try:
             response = client.models.generate_content(
-                model="gemini-2.5-flash",
+                model=MODEL_NAME,
                 contents=full_prompt,
                 config=types.GenerateContentConfig(temperature=0),
             )
@@ -84,19 +89,29 @@ def call_agent(client: genai.Client, observation: dict, max_retries: int = 5) ->
 
             return json.loads(raw)
 
-        except ResourceExhausted as e:
-            if attempt == max_retries - 1:
-                print("  ERROR: Max retries reached. Daily Free Tier quota may be exhausted.", file=sys.stderr)
-                raise e
+        except Exception as e:
+            error_str = str(e)
 
-            wait_time = _parse_retry_delay(e)
-            print(
-                f"  [Rate Limit] Free Tier quota exceeded. "
-                f"Sleeping {wait_time}s before retrying "
-                f"(Attempt {attempt + 1}/{max_retries})...",
-                file=sys.stderr,
-            )
-            time.sleep(wait_time)
+            # Handle rate limit / quota errors (429)
+            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str or "quota" in error_str.lower():
+                if attempt == max_retries - 1:
+                    print(
+                        "  ERROR: Max retries reached. Quota may be exhausted for today.",
+                        file=sys.stderr,
+                    )
+                    raise
+
+                wait_time = _parse_retry_delay(error_str)
+                print(
+                    f"  [Rate Limit] Quota exceeded. "
+                    f"Sleeping {wait_time}s before retrying "
+                    f"(Attempt {attempt + 1}/{max_retries})...",
+                    file=sys.stderr,
+                )
+                time.sleep(wait_time)
+            else:
+                # Non-rate-limit error — don't retry
+                raise
 
     raise RuntimeError("call_agent: exhausted retries without raising")
 
@@ -108,6 +123,7 @@ def run_baseline(env_url: str) -> None:
         sys.exit(1)
 
     client = genai.Client(api_key=api_key)
+    print(f"Model: {MODEL_NAME}\n")
 
     results = []
 
