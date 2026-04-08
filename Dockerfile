@@ -2,7 +2,7 @@
 FROM --platform=linux/amd64 python:3.11-slim
 
 # Metadata
-LABEL maintainer="Antigravity"
+LABEL maintainer="AI-Avengers"
 LABEL description="PR Review & Security Audit OpenEnv Environment"
 
 # Set working directory
