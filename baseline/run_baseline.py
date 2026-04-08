@@ -15,15 +15,20 @@ Output: baseline/results.json
 import argparse
 import json
 import os
+import re
 import sys
+import time
 from pathlib import Path
 
 import httpx
 import google.generativeai as genai
-
+from google.api_core.exceptions import ResourceExhausted
 
 DIFFICULTIES = ["easy", "medium", "hard"]
 RESULTS_PATH = Path(__file__).parent / "results.json"
+
+# Delay between difficulty runs to stay under free-tier RPM limit (5 req/min)
+INTER_RUN_DELAY = 15  # seconds — conservative buffer between the 3 runs
 
 SYSTEM_PROMPT = """You are a senior software engineer performing code review and security auditing.
 
@@ -46,19 +51,49 @@ def build_user_prompt(observation: dict) -> str:
     )
 
 
-def call_agent(model: genai.GenerativeModel, observation: dict) -> dict:
+def _parse_retry_delay(error: ResourceExhausted) -> int:
+    """
+    Extract the retry_delay seconds from the Gemini error message if present.
+    Falls back to 65 seconds (safe default above free-tier 1-min window).
+    """
+    match = re.search(r"retry_delay\s*\{[^}]*seconds:\s*(\d+)", str(error))
+    if match:
+        return int(match.group(1)) + 5  # add 5s buffer
+    return 65
+
+
+def call_agent(model: genai.GenerativeModel, observation: dict, max_retries: int = 5) -> dict:
     full_prompt = SYSTEM_PROMPT + "\n\n" + build_user_prompt(observation)
-    response = model.generate_content(full_prompt)
-    raw = response.text.strip()
 
-    # Strip markdown code fences if model adds them anyway
-    if raw.startswith("```"):
-        raw = raw.split("```")[1]
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
+    for attempt in range(max_retries):
+        try:
+            response = model.generate_content(full_prompt)
+            raw = response.text.strip()
 
-    return json.loads(raw)
+            # Strip markdown code fences if model adds them anyway
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+                raw = raw.strip()
+
+            return json.loads(raw)
+
+        except ResourceExhausted as e:
+            if attempt == max_retries - 1:
+                print("  ERROR: Max retries reached. Daily Free Tier quota may be exhausted.", file=sys.stderr)
+                raise e
+
+            wait_time = _parse_retry_delay(e)
+            print(
+                f"  [Rate Limit] Free Tier quota exceeded. "
+                f"Sleeping {wait_time}s before retrying "
+                f"(Attempt {attempt + 1}/{max_retries})...",
+                file=sys.stderr,
+            )
+            time.sleep(wait_time)
+
+    raise RuntimeError("call_agent: exhausted retries without raising")
 
 
 def run_baseline(env_url: str) -> None:
@@ -69,7 +104,7 @@ def run_baseline(env_url: str) -> None:
 
     genai.configure(api_key=api_key)
     model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
+        model_name="gemini-2.5-flash",
         generation_config=genai.types.GenerationConfig(
             temperature=0,  # Deterministic output
         ),
@@ -85,7 +120,12 @@ def run_baseline(env_url: str) -> None:
             sys.exit(1)
         print(f"Environment healthy: {env_url}\n")
 
-        for difficulty in DIFFICULTIES:
+        for i, difficulty in enumerate(DIFFICULTIES):
+            # Polite delay between runs to stay under free-tier RPM limit
+            if i > 0:
+                print(f"  [Rate limit guard] Waiting {INTER_RUN_DELAY}s before next run...\n")
+                time.sleep(INTER_RUN_DELAY)
+
             print(f"Running difficulty: {difficulty}")
 
             # Reset
