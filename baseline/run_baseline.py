@@ -1,11 +1,11 @@
 """
 Baseline inference script.
 
-Runs an OpenAI agent against all three task difficulties and records scores.
+Runs a Gemini agent against all three task difficulties and records scores.
 Requires the environment server to be running (local or HuggingFace Spaces).
 
 Usage:
-    export OPENAI_API_KEY=sk-...
+    export GEMINI_API_KEY=your_key_here
     python baseline/run_baseline.py --env-url http://localhost:7860
     python baseline/run_baseline.py --env-url https://your-space.hf.space
 
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 import httpx
-from openai import OpenAI
+import google.generativeai as genai
 
 
 DIFFICULTIES = ["easy", "medium", "hard"]
@@ -46,27 +46,35 @@ def build_user_prompt(observation: dict) -> str:
     )
 
 
-def call_agent(client: OpenAI, observation: dict) -> dict:
-    response = client.chat.completions.create(
-        model="gpt-4o",
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(observation)},
-        ],
-        temperature=0,  # Deterministic output
-        response_format={"type": "json_object"},
-    )
-    raw = response.choices[0].message.content
+def call_agent(model: genai.GenerativeModel, observation: dict) -> dict:
+    full_prompt = SYSTEM_PROMPT + "\n\n" + build_user_prompt(observation)
+    response = model.generate_content(full_prompt)
+    raw = response.text.strip()
+
+    # Strip markdown code fences if model adds them anyway
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
     return json.loads(raw)
 
 
 def run_baseline(env_url: str) -> None:
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        print("ERROR: OPENAI_API_KEY environment variable is not set.", file=sys.stderr)
+        print("ERROR: GEMINI_API_KEY environment variable is not set.", file=sys.stderr)
         sys.exit(1)
 
-    client = OpenAI(api_key=api_key)
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name="gemini-2.0-flash",
+        generation_config=genai.types.GenerationConfig(
+            temperature=0,  # Deterministic output
+        ),
+    )
+
     results = []
 
     with httpx.Client(base_url=env_url, timeout=30.0) as http:
@@ -88,7 +96,7 @@ def run_baseline(env_url: str) -> None:
 
             # Agent inference
             try:
-                action = call_agent(client, observation)
+                action = call_agent(model, observation)
             except Exception as e:
                 print(f"  ERROR: Agent call failed: {e}", file=sys.stderr)
                 action = {"flagged_lines": [], "findings": [], "review_text": ""}
@@ -122,7 +130,7 @@ def run_baseline(env_url: str) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run OpenAI baseline against the OpenEnv environment.")
+    parser = argparse.ArgumentParser(description="Run Gemini baseline against the OpenEnv environment.")
     parser.add_argument(
         "--env-url",
         default="http://localhost:7860",
