@@ -61,8 +61,16 @@ class EpisodeLoader:
                 )
                 self._episodes[difficulty] = []
                 continue
-            with open(path, "r", encoding="utf-8") as f:
-                self._episodes[difficulty] = json.load(f)
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    self._episodes[difficulty] = json.load(f)
+            except json.JSONDecodeError as e:
+                logger.error(
+                    f"Failed to parse episode file {path}: {e}. "
+                    f"Difficulty '{difficulty}' will return no episodes."
+                )
+                self._episodes[difficulty] = []
+                continue
             logger.info(
                 f"Loaded {len(self._episodes[difficulty])} episodes for difficulty='{difficulty}'"
             )
