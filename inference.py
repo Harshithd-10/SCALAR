@@ -402,6 +402,7 @@ def run_episode(
                 break
 
         score   = rewards[-1] if rewards else 0.0
+        score   = max(0.001, min(0.999, score))   # validator requires strictly (0, 1)
         success = score >= SUCCESS_THRESHOLD
 
     except Exception as exc:
